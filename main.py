@@ -23,22 +23,18 @@ class LogSearcher:
 		self.found_matches = 0
 		
 	def log(self, message: str):
-		"""Вывод отладочной информации"""
 		if self.verbose:
 			print(f"[DEBUG] {message}")
 	
 	def colorize_path(self, text: str) -> str:
-		"""Оранжевый цвет для пути и номера строки"""
 		if not self.color:
 			return text
 		# Оранжевый цвет: \033[38;5;208m
 		return f"\033[38;5;208m{text}\033[0m"
 	
 	def highlight_match(self, text: str, match: re.Match) -> str:
-		"""Подсветка найденного совпадения цветом"""
 		if not self.color:
 			return text
-			
 		start, end = match.span()
 		matched_text = text[start:end]
 		# Зеленый цвет для подсветки: \033[92m
@@ -46,21 +42,16 @@ class LogSearcher:
 		return highlighted
 	
 	def print_match(self, file_path: str, line_num: int, line_content: str):
-		"""Вывод найденного совпадения с цветным оформлением"""
 		if self.color:
-			# Оранжевый цвет для пути и номера строки
 			colored_prefix = self.colorize_path(f"{file_path}:{line_num}:")
 			print(f"{colored_prefix} {line_content}")
 		else:
 			print(f"{file_path}:{line_num}: {line_content}")
-	
+
 	def detect_archive_type(self, file_path: Path) -> str:
-		"""Определяет реальный тип архива по содержимому"""
 		try:
 			with open(file_path, 'rb') as f:
 				header = f.read(1024)  # Читаем первые 1024 байта
-			
-			# Проверяем сигнатуры файлов
 			if header.startswith(b'PK'):  # ZIP
 				return 'zip'
 			elif header.startswith(b'\x1f\x8b'):  # GZIP
@@ -87,23 +78,16 @@ class LogSearcher:
 					return 'gzip'
 				elif any(file_path.name.lower().endswith(ext) for ext in ['.tar.bz2', '.tbz2']):
 					return 'bzip2'
-				
 		except Exception as e:
 			self.log(f"Ошибка при определении типа архива {file_path}: {e}")
-		
 		return 'unknown'
-	
+
 	def search_in_file(self, file_path: Path, search_pattern: Pattern, 
 					  extract_archives: bool, max_depth: int = 5, current_depth: int = 0) -> bool:
-		"""
-		Поиск в файле или архиве
-		"""
 		if current_depth > max_depth:
 			self.log(f"Превышена максимальная глубина рекурсии для {file_path}")
 			return False
-		
 		found = False
-		
 		try:
 			# Проверяем, является ли файл архивом
 			if extract_archives and self.is_archive(file_path):
@@ -113,10 +97,8 @@ class LogSearcher:
 				# Обычный файл
 				self.log(f"Поиск в файле: {file_path}")
 				found = self.search_in_text_file(file_path, search_pattern)
-				
 		except Exception as e:
 			print(f"Ошибка при обработке файла {file_path}: {e}")
-			
 		return found
 	
 	def is_archive(self, file_path: Path) -> bool:
@@ -128,7 +110,6 @@ class LogSearcher:
 	def get_tar_mode(self, file_path: Path) -> str:
 		"""Определяет режим открытия TAR архива на основе реального типа"""
 		archive_type = self.detect_archive_type(file_path)
-		
 		if archive_type == 'gzip':
 			return 'r:gz'
 		elif archive_type == 'bzip2':
@@ -143,12 +124,11 @@ class LogSearcher:
 				return 'r:bz2'
 			else:
 				return 'r'  # Пробуем обычный TAR
-	
+
 	def search_in_text_file(self, file_path: Path, search_pattern: Pattern) -> bool:
 		"""Поиск в текстовом файле"""
 		found = False
 		self.processed_files += 1
-		
 		try:
 			# Определяем способ открытия файла в зависимости от расширения
 			if file_path.suffix.lower() == '.gz':
@@ -160,7 +140,6 @@ class LogSearcher:
 			else:
 				opener = open
 				mode = 'r'
-			
 			with opener(file_path, mode, encoding='utf-8', errors='ignore') as file:
 				for line_num, line in enumerate(file, 1):
 					match = search_pattern.search(line)
@@ -170,24 +149,20 @@ class LogSearcher:
 						self.print_match(str(file_path), line_num, highlighted_line)
 						found = True
 						self.found_matches += 1
-						
 		except UnicodeDecodeError:
 			# Пропускаем бинарные файлы
 			self.log(f"Пропуск бинарного файла: {file_path}")
 		except Exception as e:
 			print(f"Ошибка при чтении файла {file_path}: {e}")
-			
 		return found
 	
 	def search_in_archive(self, archive_path: Path, search_pattern: Pattern, 
 						 extract_archives: bool, max_depth: int, current_depth: int) -> bool:
 		"""Поиск в архиве"""
 		found = False
-		
 		try:
 			archive_type = self.detect_archive_type(archive_path)
 			self.log(f"Тип архива {archive_path}: {archive_type}")
-			
 			if archive_type == 'zip':
 				found = self.search_in_zip(archive_path, search_pattern, extract_archives, max_depth, current_depth)
 			elif archive_type in ['gzip', 'bzip2', 'tar']:
@@ -198,24 +173,20 @@ class LogSearcher:
 					found = self.search_in_zip(archive_path, search_pattern, extract_archives, max_depth, current_depth)
 				elif any(archive_path.name.lower().endswith(ext) for ext in ['.tar', '.tar.gz', '.tar.bz2', '.tgz', '.tbz2']):
 					found = self.search_in_tar(archive_path, search_pattern, extract_archives, max_depth, current_depth)
-				
 		except Exception as e:
 			print(f"Ошибка при обработке архива {archive_path}: {e}")
-			
 		return found
 	
 	def search_in_zip(self, zip_path: Path, search_pattern: Pattern, 
 					 extract_archives: bool, max_depth: int, current_depth: int) -> bool:
 		"""Поиск в ZIP архиве с поддержкой вложенных архивов"""
 		found = False
-		
 		try:
 			with zipfile.ZipFile(zip_path, 'r') as zip_ref:
 				for file_info in zip_ref.infolist():
 					if not file_info.is_dir():
 						file_extension = Path(file_info.filename).suffix.lower()
 						file_name = file_info.filename.lower()
-						
 						# Если это вложенный архив и разрешена распаковка
 						if extract_archives and (file_extension in ['.zip', '.tar', '.gz', '.bz2', '.tgz', '.tbz2'] or 
 											   any(file_name.endswith(ext) for ext in ['.tar.gz', '.tar.bz2'])):
@@ -225,14 +196,12 @@ class LogSearcher:
 								with tempfile.NamedTemporaryFile(delete=True, suffix=file_extension) as temp_file:
 									temp_file.write(nested_file.read())
 									temp_file.flush()
-									
 									# Рекурсивно обрабатываем вложенный архив
 									nested_found = self.search_in_file(
 										Path(temp_file.name), search_pattern, 
 										extract_archives, max_depth, current_depth + 1
 									)
 									found = found or nested_found
-						
 						else:
 							# Обычный текстовый файл
 							with zip_ref.open(file_info) as file:
@@ -249,21 +218,17 @@ class LogSearcher:
 											self.found_matches += 1
 								except Exception as e:
 									self.log(f"Ошибка при чтении файла {file_info.filename}: {e}")
-							
 		except Exception as e:
 			print(f"Ошибка при обработке ZIP архива {zip_path}: {e}")
-			
 		return found
-	
+
 	def search_in_tar(self, tar_path: Path, search_pattern: Pattern, 
 					 extract_archives: bool, max_depth: int, current_depth: int) -> bool:
 		"""Поиск в TAR архиве с поддержкой вложенных архивов"""
 		found = False
-		
 		try:
 			mode = self.get_tar_mode(tar_path)
 			self.log(f"Открытие TAR архива {tar_path} в режиме {mode}")
-			
 			# Пробуем разные режимы открытия если основной не работает
 			modes_to_try = [mode]
 			if mode == 'r:gz':
@@ -272,7 +237,6 @@ class LogSearcher:
 				modes_to_try.extend(['r:gz', 'r'])
 			else:
 				modes_to_try.extend(['r:gz', 'r:bz2'])
-			
 			for try_mode in modes_to_try:
 				try:
 					with tarfile.open(tar_path, try_mode) as tar:
@@ -281,7 +245,6 @@ class LogSearcher:
 							if member.isfile():
 								file_name = member.name.lower()
 								file_extension = Path(member.name).suffix.lower()
-								
 								# Если это вложенный архив и разрешена распаковка
 								if extract_archives and (file_extension in ['.zip', '.tar', '.gz', '.bz2', '.tgz', '.tbz2'] or 
 													   any(file_name.endswith(ext) for ext in ['.tar.gz', '.tar.bz2'])):
@@ -291,14 +254,12 @@ class LogSearcher:
 										with tempfile.NamedTemporaryFile(delete=True, suffix=file_extension) as temp_file:
 											temp_file.write(file_obj.read())
 											temp_file.flush()
-											
 											# Рекурсивно обрабатываем вложенный архив
 											nested_found = self.search_in_file(
 												Path(temp_file.name), search_pattern, 
 												extract_archives, max_depth, current_depth + 1
 											)
 											found = found or nested_found
-								
 								else:
 									# Обычный текстовый файл
 									file_obj = tar.extractfile(member)
@@ -325,9 +286,8 @@ class LogSearcher:
 							
 		except Exception as e:
 			print(f"Ошибка при обработке TAR архива {tar_path}: {e}")
-			
 		return found
-	
+
 	def search_directory(self, directory: Path, search_pattern: Pattern, 
 						file_patterns: List[str], recursive: bool, 
 						extract_archives: bool, max_depth: int = 10):
@@ -342,7 +302,6 @@ class LogSearcher:
 				elif item.is_dir() and recursive:
 					self.search_directory(item, search_pattern, file_patterns, 
 										 recursive, extract_archives, max_depth)
-						
 		except PermissionError:
 			print(f"Нет доступа к директории: {directory}")
 		except Exception as e:
